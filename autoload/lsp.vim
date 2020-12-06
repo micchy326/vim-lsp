@@ -726,6 +726,11 @@ function! s:on_exit(server_name, id, data, event) abort
     endif
 endfunction
 
+let g:lsp_progress = {}
+let g:lsp_progress['title'] = ''
+let g:lsp_progress['messages'] = ''
+let g:lsp_progress['percentage'] = 100
+
 function! s:on_notification(server_name, id, data, event) abort
     call lsp#log_verbose('<---', a:id, a:server_name, a:data)
     let l:response = a:data['response']
@@ -745,6 +750,16 @@ function! s:on_notification(server_name, id, data, event) abort
                 call lsp#ui#vim#diagnostics#handle_text_document_publish_diagnostics(a:server_name, a:data)
             elseif l:response['method'] ==# 'textDocument/semanticHighlighting'
                 call lsp#ui#vim#semantic#handle_semantic(a:server_name, a:data)
+            elseif l:response['method'] ==# '$/progress'
+                if l:response['params']['value']['kind'] ==# 'end'
+                    let g:lsp_progress['messages'] = ''
+                    let g:lsp_progress['percentage'] = 100
+                elseif l:response['params']['value']['kind'] ==# 'begin'
+                    let g:lsp_progress['title'] = l:response['params']['value']['title']
+                elseif l:response['params']['value']['kind'] ==# 'report'
+                    let g:lsp_progress['messages'] = l:response['params']['value']['message']
+                    let g:lsp_progress['percentage'] = l:response['params']['value']['percentage']
+                endif
             endif
         endif
     else
@@ -772,6 +787,8 @@ function! s:on_request(server_name, id, request) abort
     elseif a:request['method'] ==# 'workspace/configuration'
         let l:response_items = map(a:request['params']['items'], { key, val -> lsp#utils#workspace_config#get_value(a:server_name, val) })
         call s:send_response(a:server_name, { 'id': a:request['id'], 'result': l:response_items })
+    elseif a:request['method'] ==# 'window/workDoneProgress/create'
+        call s:send_response(a:server_name, { 'id': a:request['id'], 'result': v:null})
     else
         " TODO: for now comment this out until we figure out a better solution.
         " We need to comment this out so that others outside of vim-lsp can
